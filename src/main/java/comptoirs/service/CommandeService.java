@@ -106,8 +106,27 @@ public class CommandeService {
      */
     @Transactional
     public Ligne ajouterLigne(int commandeNum, int produitRef, @Positive int quantite) {
-        // TODO : implémenter cette méthode
-        throw new UnsupportedOperationException("Pas encore implémenté");
+        // vérifie que la commande existe
+        var commande = commandeDao.findById(commandeNum).orElseThrow();
+        // vérifie que le produit existe
+        var produit = produitDao.findById(produitRef).orElseThrow();
+
+        // vérifie commande ne doit pas être indisponible
+        if(produit.isIndisponible()){
+            throw new IllegalStateException("produit indisponible");
+        }
+        if ((produit.getUnitesEnStock() - produit.getUnitesCommandees() - quantite) <= 0) {
+            throw new IllegalStateException("Pas assez de stock");
+        }
+
+        if(commande.getEnvoyeele()!=null){
+            throw new IllegalStateException("La commande a déjà été envoyé");
+        }
+        var nouvelleLigne = new Ligne(commande,produit,quantite);
+        produit.setUnitesCommandees(quantite);
+        ligneDao.save(nouvelleLigne);
+
+        return nouvelleLigne;
     }
 
     /**
@@ -130,7 +149,22 @@ public class CommandeService {
      */
     @Transactional
     public Commande enregistreExpedition(int commandeNum) {
-        // TODO : implémenter cette méthode
-        throw new UnsupportedOperationException("Pas encore implémenté");
+        // vérifie que la commande existe
+        var commande = commandeDao.findById(commandeNum).orElseThrow();
+
+        // vérifie que la commande n'est pas déjà envoyé
+        if(commande.getEnvoyeele()!=null){
+            throw new IllegalStateException("La commande a déjà été envoyé");
+        }
+
+        for (Ligne l : commande.getLignes()){
+            //décrémente la quantité en stock
+            l.getProduit().setUnitesEnStock(l.getProduit().getUnitesEnStock()-l.getQuantite());
+            //décrémente la quantité commandée
+            l.getProduit().setUnitesCommandees(l.getProduit().getUnitesCommandees()-l.getQuantite());
+        }
+        // On renseigne la date d'expédition (envoyeele) avec la date du jour
+        commande.setEnvoyeele(LocalDate.now());
+        return commande;
     }
 }
